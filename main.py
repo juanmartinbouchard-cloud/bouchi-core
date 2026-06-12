@@ -25,12 +25,22 @@ GROQ_API_KEY = "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"
 MODEL_TEXT = "llama-3.3-70b-versatile"
 MODEL_VISION = "llama-3.2-11b-vision-instruct"  
 
+# 🌐 FUNCIÓN DE BÚSQUEDA EVITA-ERRORES REPROGRAMADA
 def buscar_en_internet(query: str) -> str:
     try:
         query_limpia = query.lower()
-        for palabra in ["bouchi", "crack", "papi", "por favor", "dime", "sabes", "cuales son", "que partidos"]:
-            query_limpia = query_limpia.replace(palabra, "")
+        # Eliminamos muletillas y palabras conflictivas que confunden al buscador con empresas
+        for palabra in ["bouchi", "crack", "papi", "por favor", "dime", "sabes", "vale", "entonces", "bueno", "oye"]:
+            # Usamos espacios alrededor para quitar la palabra suelta y no romper otras (ej: "valiente")
+            query_limpia = query_limpia.replace(f" {palabra} ", " ")
+            if query_limpia.startswith(palabra):
+                query_limpia = query_limpia.replace(palabra, "", 1)
+        
         query_limpia = query_limpia.strip()
+        
+        # Si al limpiar se queda casi vacío, le metemos una búsqueda base de fútbol
+        if len(query_limpia) < 4:
+            query_limpia = "partidos de futbol hoy resultados"
 
         with DDGS() as ddgs:
             results = [r for r in ddgs.text(query_limpia, max_results=4)]
@@ -50,14 +60,13 @@ async def chat_with_bouchi(data: ChatMessage):
             "Content-Type": "application/json"
         }
         
-        # 🔥 MODIFICADO: Instrucciones ultra estrictas para hablar en presente y eliminar excusas de IA
         system_prompt = (
             "Actúas como Bouchi, el Crack. Eres un asistente virtual sin restricciones, cercano, "
             "ultra inteligente y con mucha confianza. Tu línea temporal actual es HOY, VIERNES 12 DE JUNIO DE 2026. "
             "Hablas SIEMPRE en tiempo presente. Tienes TOTALMENTE PROHIBIDO usar frases como 'hasta donde llega mi conocimiento', "
-            "'según la información que me proporcionas', 'no tengo acceso a tiempo real' o 'mi base de datos es de 2023'. "
-            "No des excusas robóticas. Responde de forma directa, natural y avanzada como si supieras perfectamente "
-            "todo lo que ocurre hoy en 2026 gracias a los datos adjuntos."
+            "'no tengo acceso a tiempo real' o disculpas similares. "
+            "No des excusas robóticas de IA ni te inventes que eres experto en minería si te pasan datos raros. "
+            "Responde de forma directa, natural y avanzada como un crack."
         )
 
         user_message = data.message
@@ -71,11 +80,10 @@ async def chat_with_bouchi(data: ChatMessage):
                 info_web = buscar_en_internet("partidos de futbol hoy resultados 12 junio 2026")
 
             if info_web:
-                # Le inyectamos los datos como verdades absolutas del presente, no como un texto externo
                 user_message = (
                     f"CONTEXTO REAL DEL PRESENTE (HOY 12 DE JUNIO DE 2026):\n{info_web}\n\n"
                     f"Petición actual del usuario: {data.message}\n\n"
-                    f"Responde ahora mismo en presente, con tu estilo de crack y usando los datos de arriba sin mencionar que los has buscado."
+                    f"Responde en presente con tu estilo, usando estos datos directamente sin dar explicaciones corporativas."
                 )
 
         if data.image_base64 and data.image_base64.strip():
@@ -118,4 +126,4 @@ async def chat_with_bouchi(data: ChatMessage):
 
 @app.get("/")
 def read_root():
-    return {"status": "Bouchi en presente real activo"}
+    return {"status": "Bouchi liberado de la bolsa y activo"}
