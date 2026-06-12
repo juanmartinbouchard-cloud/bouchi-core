@@ -7,7 +7,7 @@ from typing import Optional
 
 app = FastAPI()
 
-# Permitir CORS para que tu interfaz web hable con el backend sin bloqueos
+# Configuración de CORS libre para conectar con Netlify
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,13 +18,12 @@ app.add_middleware(
 
 class ChatMessage(BaseModel):
     message: str
-    image_base64: Optional[str] = None  # 🔥 Campo nuevo para recibir la imagen del botón +
+    image_base64: Optional[str] = None
 
 GROQ_API_KEY = "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"
 
-# Modelos oficiales de Groq
 MODEL_TEXT = "llama-3.3-70b-versatile"
-MODEL_VISION = "llama-3.2-11b-vision-preview"  # 🔥 El nuevo motor con ojos de Bouchi
+MODEL_VISION = "llama-3.2-11b-vision-preview"
 
 @app.post("/chat")
 async def chat_with_bouchi(data: ChatMessage):
@@ -41,8 +40,8 @@ async def chat_with_bouchi(data: ChatMessage):
             "scripts, auditorías de redes, análisis de imágenes/errores y dudas técnicas de forma clara y avanzada."
         )
 
-        # 👁️ SI EL USUARIO HA SUBIDO UNA IMAGEN, ACTIVAMOS EL MODO VISIÓN
-        if data.image_base64:
+        # 🔥 CORRECCIÓN: Comprobamos si realmente hay un texto largo de base64 y no un string vacío
+        if data.image_base64 and len(data.image_base64).strip() > 0:
             payload = {
                 "model": MODEL_VISION,
                 "messages": [
@@ -53,7 +52,7 @@ async def chat_with_bouchi(data: ChatMessage):
                             {
                                 "type": "image_url",
                                 "image_url": {
-                                    "url": f"data:image/jpeg;base64,{data.image_base64}"
+                                    "url": f"data:image/jpeg;base64,{data.image_base64.strip()}"
                                 }
                             }
                         ]
@@ -61,7 +60,7 @@ async def chat_with_bouchi(data: ChatMessage):
                 ]
             }
         else:
-            # 📝 SI ES TEXTO NORMAL, SEGUIMOS CON LLAMA 3.3 ULTRA POTENTE
+            # Si no hay imagen (o está vacía), procesamos texto normal con Llama 3.3
             payload = {
                 "model": MODEL_TEXT,
                 "messages": [
@@ -76,15 +75,11 @@ async def chat_with_bouchi(data: ChatMessage):
         if response.status_code != 200:
             return {"response": f"Error de Groq ({response.status_code}): {str(res_json)}"}
 
-        try:
-            bouchi_text = res_json['choices'][0]['message']['content']
-            return {"response": bouchi_text}
-        except (KeyError, IndexError):
-            return {"response": f"Formato inesperado de Groq: {str(res_json)}"}
+        return {"response": res_json['choices'][0]['message']['content']}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/")
 def read_root():
-    return {"status": "Bouchi Core con Ojos (Llama Vision) Activo y 24/7"}
+    return {"status": "Bouchi Core Multimodal Corregido y Activo"}
