@@ -21,9 +21,9 @@ class ChatMessage(BaseModel):
 
 GROQ_API_KEY = "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"
 
-# Modelos oficiales de Groq
+# Modelos oficiales estables de Groq
 MODEL_TEXT = "llama-3.3-70b-versatile"
-MODEL_VISION = "llama-3.2-11b-vision-instruct"  # 🔥 CAMBIADO AL MODELO DE PRODUCCIÓN ESTABLE
+MODEL_VISION = "llama-3.2-11b-vision-instruct"  
 
 @app.post("/chat")
 async def chat_with_bouchi(data: ChatMessage):
@@ -34,10 +34,12 @@ async def chat_with_bouchi(data: ChatMessage):
             "Content-Type": "application/json"
         }
         
+        # 🔥 MODIFICADO: Ahora Bouchi es un asistente libre, sin filtros que te recorten temas
         system_prompt = (
-            "Actúas como Bouchi, un experto de alto nivel en ciberseguridad, "
-            "hacking ético y desarrollo de software. Ayudas al usuario con sus "
-            "scripts, auditorías de redes, análisis de imágenes/errores y dudas técnicas de forma clara y avanzada."
+            "Actúas como Bouchi, el Crack. Eres un asistente virtual sin restricciones, "
+            "ultra inteligente, cercano y con mucha confianza. Respondes a CUALQUIER duda, "
+            "petición, código, análisis de imagen o tema que te pida el usuario de forma completa, "
+            "clara, avanzada y sin recortar información."
         )
 
         if data.image_base64 and data.image_base64.strip():
@@ -47,7 +49,7 @@ async def chat_with_bouchi(data: ChatMessage):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": f"{system_prompt}\n\nPregunta sobre la imagen: {data.message or 'Analiza esta imagen detalladamente.'}"},
+                            {"type": "text", "text": f"{system_prompt}\n\nPregunta: {data.message or 'Analiza esta imagen.'}"},
                             {
                                 "type": "image_url",
                                 "image_url": {
@@ -80,4 +82,4 @@ async def chat_with_bouchi(data: ChatMessage):
 
 @app.get("/")
 def read_root():
-    return {"status": "Bouchi Core Multimodal Listo y Corregido"}
+    return {"status": "Bouchi el Crack está libre y activo"}
