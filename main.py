@@ -21,8 +21,9 @@ class ChatMessage(BaseModel):
 
 GROQ_API_KEY = "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"
 
+# Modelos oficiales de Groq
 MODEL_TEXT = "llama-3.3-70b-versatile"
-MODEL_VISION = "llama-3.2-90b-vision-preview"  
+MODEL_VISION = "llama-3.2-11b-vision-instruct"  # 🔥 CAMBIADO AL MODELO DE PRODUCCIÓN ESTABLE
 
 @app.post("/chat")
 async def chat_with_bouchi(data: ChatMessage):
