@@ -32,19 +32,26 @@ MODEL_GEMINI = "gemini-2.5-flash"
 def buscar_en_internet(query: str) -> str:
     try:
         query_limpia = query.lower()
-        for palabra in ["bouchi", "crack", "papi", "por favor", "dime", "sabes", "vale", "entonces", "bueno", "oye"]:
-            query_limpia = query_limpia.replace(f" {palabra} ", " ")
-            if query_limpia.startswith(palabra):
-                query_limpia = query_limpia.replace(palabra, "", 1)
-        query_limpia = query_limpia.strip()
+        for palabra in [
+            "bouchi", "crack", "papi", "por favor", "porfavor", "dime", "sabes",
+            "vale", "entonces", "bueno", "oye", "solo quiero saber",
+            "quiero saber", "quiero", "puedes decirme", "me dices",
+        ]:
+            query_limpia = query_limpia.replace(palabra, " ")
+
+        query_limpia = " ".join(query_limpia.split())  # colapsa espacios dobles
 
         if len(query_limpia) < 4:
             query_limpia = "noticias de hoy"
 
         with DDGS() as ddgs:
-            results = [r for r in ddgs.text(query_limpia, max_results=4)]
+            results = [r for r in ddgs.text(query_limpia, max_results=5, timelimit="d")]
+            if not results:
+                # Reintento sin el filtro de "último día" por si no hay nada tan reciente
+                with DDGS() as ddgs2:
+                    results = [r for r in ddgs2.text(query_limpia, max_results=5)]
             if results:
-                return "\n".join([f"- {r['body']}" for r in results])
+                return "\n".join([f"- {r['title']}: {r['body']}" for r in results])
     except Exception as e:
         print(f"Error en la búsqueda web: {e}")
     return ""
@@ -87,9 +94,19 @@ async def chat_with_bouchi(data: ChatMessage):
             info_web = buscar_en_internet(user_message)
             if info_web:
                 user_message = (
-                    f"CONTEXTO EN TIEMPO REAL COSECHADO DE INTERNET:\n{info_web}\n\n"
+                    f"CONTEXTO EN TIEMPO REAL COSECHADO DE INTERNET (úsalo como fuente principal, es de fiar):\n{info_web}\n\n"
                     f"Petición actual del usuario: {data.message}\n\n"
-                    f"Responde a la petición usando los datos de internet anteriores de forma nativa en presente con tu estilo."
+                    f"Responde a la petición usando los datos de internet anteriores de forma nativa en presente con tu estilo. "
+                    f"Si esos resultados no traen la info concreta que pide el usuario (ej. resultados/horarios exactos), "
+                    f"dile claramente que no tienes esa información en este momento, sin inventarte datos."
+                )
+            else:
+                user_message = (
+                    f"Petición actual del usuario: {data.message}\n\n"
+                    f"No se encontraron resultados de búsqueda en internet para esto. "
+                    f"NO inventes datos concretos (resultados, horarios, cifras, nombres de partidos, etc.). "
+                    f"Dile al usuario, con tu estilo, que ahora mismo no tienes esa info actualizada y "
+                    f"que lo consulte en una fuente en directo (ej. Google, una app de resultados, etc.)."
                 )
 
         contents_payload = []
