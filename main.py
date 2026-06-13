@@ -20,7 +20,7 @@ class ChatMessage(BaseModel):
     message: str
     image_base64: Optional[str] = None
 
-# 🔥 TU CLAVE REAL DE GOOGLE YA INTEGRADA
+# 🔥 CORREGIDO: Línea con comillas rectas de programación para evitar el SyntaxError
 GEMINI_API_KEY = "AQ.Ab8RN6Jxn4uLmONVoS7cwFljTA5nXltjCzQdhelnwiaGjcVyww"
 
 MODEL_GEMINI = "gemini-1.5-flash"
