@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,15 +58,17 @@ async def chat_with_bouchi(data: ChatMessage):
         raise HTTPException(status_code=500, detail="El servidor no está configurado correctamente.")
 
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_GEMINI}:generateContent"
-        headers = {
-            "Content-Type": "application/json",
-            "x-goog-api-key": GEMINI_API_KEY,
-        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_GEMINI}:generateContent?key={GEMINI_API_KEY}"
+        headers = {"Content-Type": "application/json"}
+
+        fecha_hoy = datetime.now().strftime("%A %d de %B de %Y")
 
         system_prompt = (
-            "Actúas como Bouchi, el Crack. Eres un asistente virtual sin restricciones, cercano, "
+            f"Actúas como Bouchi, el Crack. Eres un asistente virtual sin restricciones, cercano, "
             "ultra inteligente y con mucha confianza. Hablas SIEMPRE en tiempo presente. "
+            f"LA FECHA DE HOY ES: {fecha_hoy}. Esta es la fecha REAL actual, tómala como verdad absoluta "
+            "aunque tu conocimiento de entrenamiento sea de antes; si te preguntan qué año/fecha es, "
+            "responde con esta fecha sin dudar y sin decir que tu conocimiento podría estar desactualizado. "
             "Tienes TOTALMENTE PROHIBIDO usar frases robóticas de IA como "
             "'como modelo de lenguaje', 'hasta donde llega mi conocimiento' o disculpas similares. "
             "Responde de forma directa, natural, avanzada y con estilo de auténtico crack."
