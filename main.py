@@ -20,10 +20,11 @@ class ChatMessage(BaseModel):
     message: str
     image_base64: Optional[str] = None
 
-# 🔥 TU CLAVE API COMPLETA Y RECTA INTEGRADA
+# Tu clave API de Google
 GEMINI_API_KEY = "AQ.Ab8RN6Jxn4uLmONVoS7cwFIjTA5nXItjCzQdhelnwiaGjcVyww"
 
-MODEL_GEMINI = "gemini-1.5-flash"
+# 🔥 CORREGIDO: Usamos el identificador actualizado oficial de Google para la API v1beta
+MODEL_GEMINI = "gemini-1.5-flash-latest"
 
 def buscar_en_internet(query: str) -> str:
     try:
