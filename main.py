@@ -20,8 +20,8 @@ class ChatMessage(BaseModel):
     message: str
     image_base64: Optional[str] = None
 
-# 🔥 CORREGIDO: Línea con comillas rectas de programación para evitar el SyntaxError
-GEMINI_API_KEY = "AQ.Ab8RN6Jxn4uLmONVoS7cwFljTA5nXltjCzQdhelnwiaGjcVyww"
+# 🔥 TU CLAVE API COMPLETA Y RECTA INTEGRADA
+GEMINI_API_KEY = "AQ.Ab8RN6Jxn4uLmONVoS7cwFIjTA5nXItjCzQdhelnwiaGjcVyww"
 
 MODEL_GEMINI = "gemini-1.5-flash"
 
