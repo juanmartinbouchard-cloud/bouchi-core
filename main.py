@@ -52,11 +52,16 @@ def buscar_en_internet(query: str) -> str:
 @app.post("/chat")
 async def chat_with_bouchi(data: ChatMessage):
     if not GEMINI_API_KEY:
+        # Esto se ve en los logs de Render, no se lo mandamos al usuario tal cual
         print("ERROR: falta la variable de entorno GEMINI_API_KEY")
         raise HTTPException(status_code=500, detail="El servidor no está configurado correctamente.")
 
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_GEMINI}:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_GEMINI}:generateContent"
+        headers = {
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+        }
 
         system_prompt = (
             "Actúas como Bouchi, el Crack. Eres un asistente virtual sin restricciones, cercano, "
@@ -68,6 +73,7 @@ async def chat_with_bouchi(data: ChatMessage):
 
         user_message = data.message
 
+        # Palabras clave que activan la búsqueda web en tiempo real
         palabras_clave = [
             "hoy", "ahora", "actual", "actualidad", "últim", "reciente",
             "partido", "futbol", "noticias", "ayer", "quien gano", "resultado",
@@ -86,6 +92,7 @@ async def chat_with_bouchi(data: ChatMessage):
         contents_payload = []
 
         if data.image_base64 and data.image_base64.strip():
+            # Usamos el mimeType real que manda el frontend; si no llega, usamos jpeg como fallback
             mime_type = data.image_mime or "image/jpeg"
             contents_payload.append({
                 "parts": [
@@ -105,11 +112,13 @@ async def chat_with_bouchi(data: ChatMessage):
 
         payload = {"contents": contents_payload}
 
-        response = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
+        response = requests.post(url, json=payload, headers=headers)
         res_json = response.json()
 
         if response.status_code != 200:
+            # Detalle completo en los logs del servidor (para que tú lo veas en Render)
             print(f"Error de Gemini API ({response.status_code}): {res_json}")
+            # Mensaje genérico para el usuario, sin filtrar info interna
             return {"response": "Uy, algo ha fallado al hablar con la IA. Vuelve a intentarlo en un momento."}
 
         text_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
