@@ -20,8 +20,8 @@ class ChatMessage(BaseModel):
     message: str
     image_base64: Optional[str] = None
 
-# 🔥 QUITA EL TEXTO DE ABAJO Y PEGA TU CLAVE DE GOOGLE ENTRE LAS COMILLAS
-GEMINI_API_KEY = "AIzaSy..." 
+# 🔥 TU CLAVE REAL DE GOOGLE YA INTEGRADA
+GEMINI_API_KEY = "AQ.Ab8RN6Jxn4uLmONVoS7cwFljTA5nXltjCzQdhelnwiaGjcVyww"
 
 MODEL_GEMINI = "gemini-1.5-flash"
 
