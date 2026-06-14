@@ -4,7 +4,7 @@ import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 app = FastAPI()
 
@@ -17,10 +17,16 @@ app.add_middleware(
 )
 
 
+class HistoryItem(BaseModel):
+    role: str  # "user" o "bouchi"
+    text: str
+
+
 class ChatMessage(BaseModel):
     message: str
     image_base64: Optional[str] = None
     image_mime: Optional[str] = None  # ej: "image/png", "image/jpeg"
+    history: Optional[List[HistoryItem]] = None
 
 
 # La clave se lee de una variable de entorno, NUNCA se escribe aquí
@@ -28,6 +34,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # Modelo actualizado (gratis dentro de los límites de la capa gratuita de AI Studio)
 MODEL_GEMINI = "gemini-2.5-flash"
+
+# Cuántos mensajes anteriores del chat se mandan como contexto (user+bouchi cuentan por separado)
+MAX_HISTORY_MESSAGES = 12
 
 
 @app.post("/chat")
@@ -51,6 +60,9 @@ async def chat_with_bouchi(data: ChatMessage):
             "(noticias, resultados, precios, estrenos, eventos, personas, fechas, etc.). "
             "Si buscas y aun así no encuentras el dato exacto que te piden, dilo claramente "
             "en vez de inventarte cifras, resultados o nombres. "
+            "Tienes en cuenta el historial de la conversación para mantener el contexto y no "
+            "repetirte ni contradecirte, pero si el usuario cambia de tema, sigues el tema nuevo "
+            "sin aferrarte al anterior. "
             "Tienes TOTALMENTE PROHIBIDO usar frases robóticas de IA como "
             "'como modelo de lenguaje', 'hasta donde llega mi conocimiento' o disculpas similares. "
             "Responde de forma directa, natural, avanzada y con estilo de auténtico crack."
@@ -58,11 +70,24 @@ async def chat_with_bouchi(data: ChatMessage):
 
         contents_payload = []
 
+        # 1) Historial previo de la conversación (texto), si lo hay
+        if data.history:
+            historial_recortado = data.history[-MAX_HISTORY_MESSAGES:]
+            for item in historial_recortado:
+                gemini_role = "user" if item.role == "user" else "model"
+                if item.text and item.text.strip():
+                    contents_payload.append({
+                        "role": gemini_role,
+                        "parts": [{"text": item.text}]
+                    })
+
+        # 2) Mensaje actual del usuario (con o sin imagen)
         if data.image_base64 and data.image_base64.strip():
             mime_type = data.image_mime or "image/jpeg"
             contents_payload.append({
+                "role": "user",
                 "parts": [
-                    {"text": f"{system_prompt}\n\nPregunta sobre la imagen: {data.message or 'Analiza esta foto.'}"},
+                    {"text": data.message or "Analiza esta foto."},
                     {
                         "inlineData": {
                             "mimeType": mime_type,
@@ -73,11 +98,13 @@ async def chat_with_bouchi(data: ChatMessage):
             })
         else:
             contents_payload.append({
-                "parts": [{"text": f"{system_prompt}\n\nUsuario: {data.message}"}]
+                "role": "user",
+                "parts": [{"text": data.message}]
             })
 
         payload = {
             "contents": contents_payload,
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
             # Gemini busca en Google por su cuenta cuando lo necesita (gratis en la capa free)
             "tools": [{"google_search": {}}],
         }
@@ -99,4 +126,4 @@ async def chat_with_bouchi(data: ChatMessage):
 
 @app.get("/")
 def read_root():
-    return {"status": "Bouchi el Crack con motor Gemini 2.5 Flash + Google Search activo"}
+    return {"status": "Bouchi el Crack con motor Gemini 2.5 Flash + Google Search + memoria activo"}
