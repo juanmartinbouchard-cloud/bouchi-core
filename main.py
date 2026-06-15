@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime
 import requests
 from fastapi import FastAPI, HTTPException
@@ -114,11 +115,22 @@ async def chat_with_bouchi(data: ChatMessage):
             "tools": [{"google_search": {}}],
         }
 
-        response = requests.post(url, json=payload, headers=headers)
-        res_json = response.json()
+        # Reintentos: Gemini a veces devuelve 503 "high demand", que suele
+        # resolverse solo en 1-2 segundos. Probamos hasta 3 veces antes de rendirnos.
+        max_intentos = 3
+        for intento in range(1, max_intentos + 1):
+            response = requests.post(url, json=payload, headers=headers)
+            res_json = response.json()
 
-        if response.status_code != 200:
-            print(f"Error de Gemini API ({response.status_code}): {res_json}")
+            if response.status_code == 200:
+                break
+
+            print(f"Intento {intento}/{max_intentos} - Error de Gemini API ({response.status_code}): {res_json}")
+
+            if response.status_code == 503 and intento < max_intentos:
+                time.sleep(1.5)
+                continue
+
             return {"response": "Uy, algo ha fallado al hablar con la IA. Vuelve a intentarlo en un momento."}
 
         text_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
