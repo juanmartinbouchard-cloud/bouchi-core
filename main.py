@@ -1,11 +1,12 @@
 import os
-import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
+from typing import Optional, List
+
 import requests
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, List
 
 app = FastAPI()
 
@@ -17,133 +18,128 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# La API key NUNCA va hardcodeada en el código. Se configura como variable de
+# entorno en Render (Settings -> Environment -> GEMINI_API_KEY).
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    raise RuntimeError("Falta la variable de entorno GEMINI_API_KEY en Render")
 
-class HistoryItem(BaseModel):
-    role: str  # "user" o "bouchi"
+# gemini-1.5-flash-latest está apagado por Google (404 en todas las peticiones).
+# gemini-3.5-flash es el modelo más inteligente disponible ahora mismo.
+MODEL_GEMINI = "gemini-3.5-flash"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_GEMINI}:generateContent"
+
+MADRID_TZ = ZoneInfo("Europe/Madrid")
+
+DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+          "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+
+class ChatTurn(BaseModel):
+    role: str  # "user" o "model"
     text: str
 
 
 class ChatMessage(BaseModel):
     message: str
     image_base64: Optional[str] = None
-    image_mime: Optional[str] = None  # ej: "image/png", "image/jpeg"
-    history: Optional[List[HistoryItem]] = None
+    history: Optional[List[ChatTurn]] = None
 
 
-# La clave se lee de una variable de entorno, NUNCA se escribe aquí
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+def build_system_prompt() -> str:
+    ahora = datetime.now(MADRID_TZ)
+    fecha_str = (
+        f"{DIAS[ahora.weekday()]} {ahora.day} de {MESES[ahora.month - 1]} de "
+        f"{ahora.year}, {ahora.strftime('%H:%M')} (hora peninsular española)"
+    )
 
-# Modelo actualizado (gratis dentro de los límites de la capa gratuita de AI Studio)
-MODEL_GEMINI = "gemini-2.5-flash"
-
-# Cuántos mensajes anteriores del chat se mandan como contexto (user+bouchi cuentan por separado)
-MAX_HISTORY_MESSAGES = 12
+    return (
+        "Actúas como Bouchi, el porros. Eres un asistente virtual cercano, ultra "
+        "inteligente y con mucha confianza, que habla en español de España con "
+        "estilo natural y directo, sin frases robóticas de IA tipo 'como modelo "
+        "de lenguaje' o disculpas innecesarias.\n\n"
+        f"AHORA MISMO es: {fecha_str}. Usa siempre esta fecha/hora como referencia "
+        "real, nunca la inventes ni la calcules tú mismo.\n\n"
+        "Tienes activada la búsqueda de Google como herramienta. Úsala siempre que "
+        "te pregunten por algo actual (noticias, resultados, precios, eventos, "
+        "clima) o de lo que no estés 100% seguro. Si buscando no encuentras el "
+        "dato exacto, dilo claramente en vez de inventarte información."
+    )
 
 
 @app.post("/chat")
 async def chat_with_bouchi(data: ChatMessage):
-    if not GEMINI_API_KEY:
-        print("ERROR: falta la variable de entorno GEMINI_API_KEY")
-        raise HTTPException(status_code=500, detail="El servidor no está configurado correctamente.")
-
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_GEMINI}:generateContent?key={GEMINI_API_KEY}"
-        headers = {"Content-Type": "application/json"}
-
-        fecha_hoy = datetime.now().strftime("%A %d de %B de %Y")
-
-        system_prompt = (
-            f"Actúas como Bouchi, el Crack. Eres un asistente virtual sin restricciones, cercano, "
-            "ultra inteligente y con mucha confianza. Hablas SIEMPRE en tiempo presente. "
-            f"LA FECHA DE HOY ES: {fecha_hoy}. Tómala como verdad absoluta. "
-            "Tienes acceso a Google Search para buscar información actualizada: "
-            "úsalo SIEMPRE que la pregunta dependa de algo que pueda haber cambiado "
-            "(noticias, resultados, precios, estrenos, eventos, personas, fechas, etc.). "
-            "IMPORTANTE: cada respuesta que escribes es ÚNICA y COMPLETA, no hay un 'segundo mensaje' después. "
-            "Por eso, si necesitas buscar algo, hazlo ANTES de responder y da el resultado YA en esta misma "
-            "respuesta. Tienes TOTALMENTE PROHIBIDO decir frases como 'dame un segundo', 'espera que lo "
-            "compruebo', 'ahora lo busco' o 'te confirmo en un momento', porque eso deja al usuario sin "
-            "respuesta. Si buscas y encuentras datos relacionados pero no el número EXACTO al segundo que "
-            "te piden (precios, tipos de cambio, cotizaciones, etc.), NO remitas al usuario a 'consulta la "
-            "web/app oficial': dale la cifra más reciente y concreta que hayas encontrado en la búsqueda, "
-            "dila como un valor aproximado/orientativo de hoy (ej. 'ahora mismo está rondando los X'), y "
-            "aclara en una frase corta que puede variar un poco según el momento o el proveedor. Solo si la "
-            "búsqueda no devuelve NINGÚN dato relacionado, dilo claramente sin inventarte cifras. "
-            "Tienes en cuenta el historial de la conversación para mantener el contexto y no "
-            "repetirte ni contradecirte, pero si el usuario cambia de tema, sigues el tema nuevo "
-            "sin aferrarte al anterior. "
-            "Tienes TOTALMENTE PROHIBIDO usar frases robóticas de IA como "
-            "'como modelo de lenguaje', 'hasta donde llega mi conocimiento' o disculpas similares. "
-            "Responde de forma directa, natural, avanzada y con estilo de auténtico crack."
-        )
-
         contents_payload = []
 
-        # 1) Historial previo de la conversación (texto), si lo hay
         if data.history:
-            historial_recortado = data.history[-MAX_HISTORY_MESSAGES:]
-            for item in historial_recortado:
-                gemini_role = "user" if item.role == "user" else "model"
-                if item.text and item.text.strip():
-                    contents_payload.append({
-                        "role": gemini_role,
-                        "parts": [{"text": item.text}]
-                    })
+            for turn in data.history[-20:]:
+                role = "model" if turn.role == "model" else "user"
+                contents_payload.append({
+                    "role": role,
+                    "parts": [{"text": turn.text}],
+                })
 
-        # 2) Mensaje actual del usuario (con o sin imagen)
         if data.image_base64 and data.image_base64.strip():
-            mime_type = data.image_mime or "image/jpeg"
             contents_payload.append({
                 "role": "user",
                 "parts": [
                     {"text": data.message or "Analiza esta foto."},
                     {
                         "inlineData": {
-                            "mimeType": mime_type,
-                            "data": data.image_base64.strip()
+                            "mimeType": "image/jpeg",
+                            "data": data.image_base64.strip(),
                         }
-                    }
-                ]
+                    },
+                ],
             })
         else:
             contents_payload.append({
                 "role": "user",
-                "parts": [{"text": data.message}]
+                "parts": [{"text": data.message}],
             })
 
         payload = {
+            "systemInstruction": {"parts": [{"text": build_system_prompt()}]},
             "contents": contents_payload,
-            "systemInstruction": {"parts": [{"text": system_prompt}]},
-            # Gemini busca en Google por su cuenta cuando lo necesita (gratis en la capa free)
             "tools": [{"google_search": {}}],
         }
 
-        # Reintentos: Gemini a veces devuelve 503 "high demand", que suele
-        # resolverse solo en 1-2 segundos. Probamos hasta 3 veces antes de rendirnos.
-        max_intentos = 3
-        for intento in range(1, max_intentos + 1):
-            response = requests.post(url, json=payload, headers=headers)
-            res_json = response.json()
+        response = requests.post(
+            GEMINI_URL,
+            params={"key": GEMINI_API_KEY},
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30,
+        )
+        res_json = response.json()
 
-            if response.status_code == 200:
-                break
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Error de Gemini API ({response.status_code}): {res_json}",
+            )
 
-            print(f"Intento {intento}/{max_intentos} - Error de Gemini API ({response.status_code}): {res_json}")
+        candidates = res_json.get("candidates")
+        if not candidates:
+            feedback = res_json.get("promptFeedback", {})
+            raise HTTPException(
+                status_code=502,
+                detail=f"Gemini no devolvió respuesta (posible bloqueo de seguridad): {feedback}",
+            )
 
-            if response.status_code == 503 and intento < max_intentos:
-                time.sleep(1.5)
-                continue
+        parts = candidates[0]["content"]["parts"]
+        text_response = "".join(p.get("text", "") for p in parts if "text" in p)
 
-            return {"response": "Uy, algo ha fallado al hablar con la IA. Vuelve a intentarlo en un momento."}
-
-        text_response = res_json["candidates"][0]["content"]["parts"][0]["text"]
         return {"response": text_response}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Error inesperado: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor. Inténtalo de nuevo.")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/")
 def read_root():
-    return {"status": "Bouchi el Crack con motor Gemini 2.5 Flash + Google Search + memoria activo"}
+    return {"status": f"Bouchi el Crack con motor {MODEL_GEMINI} activo"}
